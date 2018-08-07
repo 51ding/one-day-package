@@ -1,0 +1,23 @@
+{
+  "name": "one-day-package",
+  "version": "1.0.0",
+  "description": "npm现在现在有70万的包，如何在里边发现有用的、有意思的包？这个仓库旨在发现用有意思的包做有意思的事儿！ 如果你也发现了有趣的包，就加入这个项目吧！",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/51ding/one-day-package.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/51ding/one-day-package/issues"
+  },
+  "homepage": "https://github.com/51ding/one-day-package#readme",
+  "dependencies": {
+    "commander": "^2.17.0",
+    "mongoose": "^5.2.7"
+  }
+}
