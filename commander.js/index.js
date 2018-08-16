@@ -5,8 +5,8 @@ var crpyto = require("crypto");
 var colors = require("colors");
 var fs = require("fs");
 var path = require("path");
-
-
+var {stdin, stdout} = process;
+var child = require("child_process");
 //设置版本信息
 var appConfig = {
     appKey: "3adf92f117653119",
@@ -50,7 +50,8 @@ function translate(options, callback) {
     });
     request.get(url + queryString.substring(0, queryString.length - 1), {json: true}, function (err, response, body) {
         if (err) return console.log(err.message);
-        body = (!body.basic || !body.basic.explains) ? ['无释义'] : body.basic.explains;
+        var defaultValue = body.translation;
+        body = (!body.basic || !body.basic.explains) ? defaultValue : body.basic.explains;
         if (callback) callback(body);
     })
 }
@@ -90,35 +91,78 @@ program
     .usage("[options] [words]")
     .version("v0.0.1", "-v,--version")
     .option('-e,--e2c <words>', '英译汉', function (words) {
-        operateWords(words,"英译汉",E2C);
+        operateWords(words, "英译汉", E2C);
     })
     .option("-c,--c2e <words>", "汉译英", function (words) {
-        operateWords(words,"汉译英",C2E);
+        operateWords(words, "汉译英", C2E);
     })
-    .option("-s,--stat","统计单词查询次数",function () {
+    .option("-s,--stat", "统计单词查询次数", function () {
         statistics();
     })
+    .option("--cli", "进入命令行", function () {
+        cliOperate();
+    })
 
-function operateWords(words,desc,fn) {
-    readRecord("all",function (err,data) {
-        if(err) return console.log(err.message.red);
-        if(data.has(words)){
 
-            data.get(words).total+=1;
-            saveRecord(data,(err) => {
-                if(err) return console.log(err.message.red);
-                showData(data.get(words).data,"英译汉");
+/*处理命令行的输入*/
+function cliOperate() {
+    stdin.setEncoding("utf8");
+    stdin.resume();
+    console.log("请输入单词或语句：".grey);
+    var isSelect = false;
+    var currentData;
+    stdin.on("data", data => {
+        data = data.replace(/\r\n/g, "");
+        if (data == 0) return stdin.pause();
+        if (isSelect) {
+            let length = currentData.length;
+            let range = length > 1 ? `1~${length}` : 1;
+            var inputNumber = parseInt(data);
+            if (!Number.isInteger(inputNumber) || !isInRange(inputNumber, 1, length))
+                return console.log(`无效的输入,请重新输入(${range})！`.red);
+            child.exec(`echo ${currentData[inputNumber - 1].trim()} | clip`, () => {
+                isSelect = false;
+                console.log("您的选择已经在粘贴板里，直接使用Ctrl + V 使用！");
+                console.log();
+                console.log("请输入单词或语句：".grey);
+            });
+        }
+        else {
+            operateWords(data, "翻译", isContainsChinese(data) ? C2E : E2C, record => {
+                let length = record.length;
+                let range = length > 1 ? `1~${length}` : 1;
+                console.log(`请选择翻译对应的编号,请输入(${range}):`.yellow);
+                currentData = record;
+                isSelect = true;
+            });
+        }
+    })
+}
+
+
+function operateWords(words, desc, fn, fnData) {
+    readRecord("all", function (err, data) {
+        if (err) return console.log(err.message.red);
+        if (data.has(words)) {
+            data.get(words).total += 1;
+            saveRecord(data, (err) => {
+                if (err) return console.log(err.message.red);
+                var record = data.get(words).data;
+                showData(record, desc);
+                fnData && fnData(record);
+
             })
         }
-        else{
-            fn.call(null,words,function (body) {
-                data.set(words,{
-                    data:body,
-                    total:1
+        else {
+            fn.call(null, words, function (body) {
+                data.set(words, {
+                    data: body,
+                    total: 1
                 })
-                saveRecord(data,(err) => {
-                    if(err) return console.log(err.message.red);
-                    showData(body,"英译汉");
+                saveRecord(data, (err) => {
+                    if (err) return console.log(err.message.red);
+                    showData(body, desc);
+                    fnData && fnData(body);
                 })
             })
         }
@@ -128,12 +172,12 @@ function operateWords(words,desc,fn) {
 
 //查询统计
 function statistics() {
-    readRecord("all",function (err,data) {
-        var array=bubbleSort(data);
+    readRecord("all", function (err, data) {
+        var array = bubbleSort(data);
         console.log(`-----------------统计--------------------`.green);
         console.log();
         array.forEach((item, index) => {
-            console.log(`${index}、单词:【${item[0]}】-查询次数:${item[1].total}`.green);
+            console.log(`${index + 1}、单词:【${item[0]}】-查询次数:${item[1].total}`.green);
         })
         console.log();
         console.log(`-------------------------------------------`.green);
@@ -141,22 +185,22 @@ function statistics() {
 }
 
 function tongji(fn) {
-    var start=Date.now();
+    var start = Date.now();
     console.log("开始---");
     fn();
-    console.log(`结束----,共耗时${Date.now()-start}ms`);
+    console.log(`结束----,共耗时${Date.now() - start}ms`);
 }
 
 
 //冒泡排序
 function bubbleSort(map) {
-    var arr=[...map];
+    var arr = [...map];
     var len = arr.length;
     for (var i = 0; i < len; i++) {
         for (var j = 0; j < len - 1 - i; j++) {
-            if (arr[j][1].total <= arr[j+1][1].total) {        //相邻元素两两对比
-                var temp = arr[j+1];        //元素交换
-                arr[j+1] = arr[j];
+            if (arr[j][1].total <= arr[j + 1][1].total) {        //相邻元素两两对比
+                var temp = arr[j + 1];        //元素交换
+                arr[j + 1] = arr[j];
                 arr[j] = temp;
             }
         }
@@ -166,7 +210,7 @@ function bubbleSort(map) {
 
 //插入排序
 function insertionSort(map) {
-    var arr=[...map];
+    var arr = [...map];
     var len = arr.length;
     var preIndex, current;
     for (var i = 1; i < len; i++) {
@@ -186,7 +230,7 @@ function showData(data, title) {
     console.log(`-----------------${title}--------------------`.green);
     console.log();
     data.forEach((item, index) => {
-        console.log(`   ${index}、${item}`.green);
+        console.log(`   ${index + 1}、${item}`.green);
     })
     console.log();
     console.log(`-------------------------------------------`.green);
@@ -195,16 +239,16 @@ function showData(data, title) {
 
 function readRecord(query, fn) {
     fs.readFile(path.join(__dirname, "record.json"), "utf8", function (err, data) {
-        if (err) return fn(err,null);
+        if (err) return fn(err, null);
         var map = jsonToStrMap(data);
-        var result=query === "all" ? map:map.get(query.key);
-        fn(null,result);
+        var result = query === "all" ? map : map.get(query.key);
+        fn(null, result);
     })
 }
 
-function saveRecord(map,fn) {
-    fs.writeFile(path.join(__dirname,"record.json"),strMapToJson(map),function (err) {
-        if(err) return fn(err,null);
+function saveRecord(map, fn) {
+    fs.writeFile(path.join(__dirname, "record.json"), strMapToJson(map), function (err) {
+        if (err) return fn(err, null);
         fn(null);
     })
 }
@@ -232,6 +276,19 @@ function strMapToObj(strMap) {
         obj[k] = v;
     }
     return obj;
+}
+
+
+//判断一个数字是否在某个范围内
+function isInRange(number, min, max) {
+    console.log(number);
+    return number >= min && number <= max
+}
+
+//判断是否包含中文
+function isContainsChinese(val) {
+    var reg = new RegExp("[\\u4E00-\\u9FFF]+", "g");
+    return reg.test(val);
 }
 
 
