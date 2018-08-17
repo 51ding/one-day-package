@@ -7,6 +7,9 @@ var fs = require("fs");
 var path = require("path");
 var {stdin, stdout} = process;
 var child = require("child_process");
+var fs = require("fs");
+var path = require("path");
+
 //设置版本信息
 var appConfig = {
     appKey: "3adf92f117653119",
@@ -120,11 +123,13 @@ function cliOperate() {
             var inputNumber = parseInt(data);
             if (!Number.isInteger(inputNumber) || !isInRange(inputNumber, 1, length))
                 return console.log(`无效的输入,请重新输入(${range})！`.red);
-            child.exec(`echo ${currentData[inputNumber - 1].trim()} | clip`, () => {
-                isSelect = false;
-                console.log("您的选择已经在粘贴板里，直接使用Ctrl + V 使用！");
-                console.log();
-                console.log("请输入单词或语句：".grey);
+            clearWhiteSpace(currentData[inputNumber - 1], filePath => {
+                child.exec(`clip < ${filePath}`, () => {
+                    isSelect = false;
+                    console.log("您的选择已经在粘贴板里，直接使用Ctrl + V 使用！");
+                    console.log();
+                    console.log("请输入单词或语句：".grey);
+                })
             });
         }
         else {
@@ -136,6 +141,16 @@ function cliOperate() {
                 isSelect = true;
             });
         }
+    })
+}
+
+function clearWhiteSpace(content, cb) {
+    //生成一个临时文件
+    var filePath = path.join(__dirname, "temporary.js");
+    var writeStream = fs.createWriteStream(filePath);
+    writeStream.end(content);
+    writeStream.on("finish", () => {
+        cb(filePath);
     })
 }
 
@@ -281,7 +296,6 @@ function strMapToObj(strMap) {
 
 //判断一个数字是否在某个范围内
 function isInRange(number, min, max) {
-    console.log(number);
     return number >= min && number <= max
 }
 
